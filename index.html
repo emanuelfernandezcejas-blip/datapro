@@ -1062,6 +1062,65 @@ async function findTeamId(name,league){
 async function getLastFixtures(teamId){return await apiFetch('fixtures?team='+teamId+'&last=5&status=FT');}
 async function getSquadStats(teamId,leagueId){return await apiFetch('players?team='+teamId+'&league='+leagueId+'&season=2024&page=1');}
 
+async function getH2HData(homeId, awayId) {
+  try {
+    var data = await apiFetch('fixtures?h2h=' + homeId + '-' + awayId + '&last=10');
+    return data || [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function processH2H(fixtures, homeId, awayId, homeName, awayName) {
+  if (!fixtures || fixtures.length === 0) return null;
+
+  var homeWins = 0, awayWins = 0, draws = 0;
+  var totalGoals = 0, bttsCount = 0, over25Count = 0;
+  var matches = [];
+
+  fixtures.forEach(function(f) {
+    var hg = f.goals.home || 0;
+    var ag = f.goals.away || 0;
+    var isHomeTeamHome = f.teams.home.id === homeId;
+    var homeGoals = isHomeTeamHome ? hg : ag;
+    var awayGoals = isHomeTeamHome ? ag : hg;
+
+    if (homeGoals > awayGoals) homeWins++;
+    else if (awayGoals > homeGoals) awayWins++;
+    else draws++;
+
+    totalGoals += hg + ag;
+    if (hg > 0 && ag > 0) bttsCount++;
+    if (hg + ag > 2) over25Count++;
+
+    var d = new Date(f.fixture.date);
+    var dateStr = d.toLocaleDateString('es-AR', {day:'2-digit', month:'short', year:'numeric'});
+
+    matches.push({
+      home: f.teams.home.name,
+      away: f.teams.away.name,
+      homeGoals: hg,
+      awayGoals: ag,
+      date: dateStr,
+      competition: f.league.name,
+      winner: hg > ag ? 'H' : ag > hg ? 'A' : 'D'
+    });
+  });
+
+  var total = fixtures.length;
+  return {
+    homeWins: homeWins,
+    awayWins: awayWins,
+    draws: draws,
+    total: total,
+    avgGoals: (totalGoals / total).toFixed(1),
+    bttsRate: Math.round(bttsCount / total * 100),
+    over25Rate: Math.round(over25Count / total * 100),
+    matches: matches,
+    isReal: true
+  };
+}
+
 function processFixtures(fixtures,teamId){
   if(!fixtures||fixtures.length===0) return null;
   var goals=0,ga=0,form=[];
@@ -1498,6 +1557,12 @@ async function doAnalyzeWith(league,home,away){
         homePlayers=processPlayers(hP);
         awayPlayers=processPlayers(aP);
       }catch(e){}
+      // Cargar H2H real
+      document.getElementById('ltxt').textContent='CARGANDO HISTORIAL H2H...';
+      try{
+        var h2hRaw=await getH2HData(hTeam.id,aTeam.id);
+        h2hData=processH2H(h2hRaw,hTeam.id,aTeam.id,home,away);
+      }catch(e){ h2hData=null; }
       document.getElementById('ainfo').textContent='LIVE · Temporada 2024 · API-Football';
     }catch(err){
       d=generateDemo(home,away,league);
@@ -1511,7 +1576,7 @@ async function doAnalyzeWith(league,home,away){
 
   // Ocultar loading y mostrar resultado
   document.getElementById('divLoading').style.display='none';
-  render(home,away,league,d,homePlayers,awayPlayers,homeLogo,awayLogo);
+  render(home,away,league,d,homePlayers,awayPlayers,homeLogo,awayLogo,h2hData);
   document.getElementById('divResult').style.display='block';
   document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
   document.querySelectorAll('.tabpane').forEach(function(t,i){t.classList.toggle('active',i===0);});
@@ -1527,7 +1592,7 @@ function safeRun(fn, name) {
   try { fn(); } catch(e) { console.error('Error en ' + name + ':', e); }
 }
 
-function render(home,away,league,d,realH,realA,homeLogo,awayLogo){
+function render(home,away,league,d,realH,realA,homeLogo,awayLogo,h2hData){
   var hs=home.split(' ')[0],as2=away.split(' ')[0];
   var seed=seedOf(home+away+league);
   document.getElementById('rLeague').textContent=LNAMES[league]||league;
@@ -1542,7 +1607,7 @@ function render(home,away,league,d,realH,realA,homeLogo,awayLogo){
   safeRun(function(){renderMercados(home,away,d,hs,as2,seed);},'renderMercados');
   safeRun(function(){renderOdds(home,away,league,d);},'renderOdds');
   safeRun(function(){renderValueBet(home,away,league,d);},'renderValueBet');
-  safeRun(function(){renderH2H(home,away,league,d);},'renderH2H');
+  safeRun(function(){renderH2H(home,away,league,d,h2hData);},'renderH2H');
   safeRun(function(){renderLocalidad(home,away,league,d);},'renderLocalidad');
   safeRun(function(){renderJugadores(home,away,seed,realH,realA,d.isDemo);},'renderJugadores');
   safeRun(function(){renderArbitro(home,away,league,d,seed);},'renderArbitro');
@@ -2164,40 +2229,69 @@ window.recalcValue = function(id, ourProb) {
 };
 
 // ── H2H ──────────────────────────────────────────────────────────────────
-function renderH2H(home, away, league, d) {
+function renderH2H(home, away, league, d, h2hData) {
   var seed = seedOf(home + away + league);
   var hs = home.split(' ')[0], as2 = away.split(' ')[0];
 
-  var totalMatches = rnd(seed, 8, 20, 1);
-  var homeWins = rnd(seed, 2, Math.floor(totalMatches * 0.6), 2);
-  var draws = rnd(seed, 1, Math.floor((totalMatches - homeWins) * 0.5), 3);
-  var awayWins = totalMatches - homeWins - draws;
-  var avgGoals = rndf(seed, 1.8, 3.2, 4);
-  var bttsRate = rnd(seed, 45, 75, 5);
-  var over25Rate = rnd(seed, 40, 70, 6);
-  var avgCorners = rndf(seed, 7.5, 11.5, 7);
+  // Usar datos reales si están disponibles, sino generar DEMO
+  var isReal = h2hData && h2hData.isReal && h2hData.total > 0;
+
+  var totalMatches, homeWins, draws, awayWins, avgGoals, bttsRate, over25Rate, avgCorners;
+
+  if (isReal) {
+    totalMatches = h2hData.total;
+    homeWins     = h2hData.homeWins;
+    draws        = h2hData.draws;
+    awayWins     = h2hData.awayWins;
+    avgGoals     = parseFloat(h2hData.avgGoals);
+    bttsRate     = h2hData.bttsRate;
+    over25Rate   = h2hData.over25Rate;
+    avgCorners   = rndf(seed, 7.5, 11.5, 7); // corners no vienen en H2H básico
+  } else {
+    totalMatches = rnd(seed, 8, 20, 1);
+    homeWins     = rnd(seed, 2, Math.floor(totalMatches * 0.6), 2);
+    draws        = rnd(seed, 1, Math.floor((totalMatches - homeWins) * 0.5), 3);
+    awayWins     = totalMatches - homeWins - draws;
+    avgGoals     = rndf(seed, 1.8, 3.2, 4);
+    bttsRate     = rnd(seed, 45, 75, 5);
+    over25Rate   = rnd(seed, 40, 70, 6);
+    avgCorners   = rndf(seed, 7.5, 11.5, 7);
+  }
 
   var homePct = Math.round(homeWins / totalMatches * 100);
   var drawPct = Math.round(draws / totalMatches * 100);
   var awayPct = 100 - homePct - drawPct;
 
-  // Generar partidos históricos simulados
-  var years = [2024, 2024, 2023, 2023, 2022, 2022, 2021, 2020];
-  var matchDates = ['Abr 2024','Ene 2024','Nov 2023','May 2023','Oct 2022','Mar 2022','Dic 2021','Sep 2020'];
+  // Usar partidos reales o generar demo
   var matches = [];
-  for (var i = 0; i < Math.min(8, totalMatches); i++) {
-    var s2 = seed + i * 31;
-    var hg = rnd(s2, 0, 3, i + 10);
-    var ag = rnd(s2, 0, 3, i + 20);
-    var swapped = rnd(s2, 0, 1, i + 30) === 1;
-    var res = hg > ag ? 'H' : hg < ag ? 'A' : 'D';
-    matches.push({
-      home: swapped ? as2 : hs,
-      away: swapped ? hs : as2,
-      hg: hg, ag: ag, res: res,
-      date: matchDates[i] || '2020',
-      competition: league.startsWith('arg') ? 'Liga Profesional' : 'Liga'
+  if (isReal && h2hData.matches && h2hData.matches.length > 0) {
+    h2hData.matches.forEach(function(m) {
+      matches.push({
+        home: m.home,
+        away: m.away,
+        hg: m.homeGoals,
+        ag: m.awayGoals,
+        res: m.winner,
+        date: m.date,
+        competition: m.competition
+      });
     });
+  } else {
+    var matchDates = ['Abr 2024','Ene 2024','Nov 2023','May 2023','Oct 2022','Mar 2022','Dic 2021','Sep 2020'];
+    for (var i = 0; i < Math.min(8, totalMatches); i++) {
+      var s2 = seed + i * 31;
+      var hg = rnd(s2, 0, 3, i + 10);
+      var ag = rnd(s2, 0, 3, i + 20);
+      var swapped = rnd(s2, 0, 1, i + 30) === 1;
+      var res = hg > ag ? 'H' : hg < ag ? 'A' : 'D';
+      matches.push({
+        home: swapped ? as2 : hs,
+        away: swapped ? hs : as2,
+        hg: hg, ag: ag, res: res,
+        date: matchDates[i] || '2020',
+        competition: league.startsWith('arg') ? 'Liga Profesional' : 'Liga'
+      });
+    }
   }
 
   var html = '';
@@ -2249,7 +2343,7 @@ function renderH2H(home, away, league, d) {
     html += '</div>';
   });
   html += '</div>';
-  html += '<div class="disc" style="margin-top:14px">⚠ Datos H2H en modo DEMO. Con API conectada se traen los enfrentamientos reales históricos.</div>';
+  html += '<div class="disc" style="margin-top:14px">' + (isReal ? '◆ Datos reales — Últimos ' + totalMatches + ' enfrentamientos directos vía API-Football.' : '⚠ Datos H2H en modo DEMO. Conectá tu API Key para ver los enfrentamientos reales.') + '</div>';
 
   document.getElementById('tab-h2h').innerHTML = html;
 }
