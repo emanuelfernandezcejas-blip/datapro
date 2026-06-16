@@ -1810,25 +1810,20 @@ async function doAnalyze(){
 }
 
 async function doAnalyzeWith(league,home,away){
-  console.log('doAnalyzeWith called:', league, home, away);
   if(!league||!home||!away||home===away){
-    console.log('RETURN: parámetros inválidos');
-    return;
+      return;
   }
 
   // Control de límite de análisis
   loadAnalysisCount();
-  console.log('canAnalyze:', canAnalyze(), 'ANALYSES_TODAY:', ANALYSES_TODAY, 'USER_PLAN:', USER_PLAN);
   if(!canAnalyze()){
     var plan=USER_PLAN;
-    console.log('RETURN: límite alcanzado');
-    if(plan==='visitor'){showPanel('panelRegister');}
+      if(plan==='visitor'){showPanel('panelRegister');}
     else{showPanel('panelPremium');}
     openAuthModal();
     return;
   }
   incrementAnalysis();
-  console.log('Pasó el límite, ejecutando análisis...');
 
   // Sincronizar selects
   var lSel=document.getElementById('selLeague');
@@ -1850,7 +1845,7 @@ async function doAnalyzeWith(league,home,away){
   // Dar tiempo al browser para renderizar el loading antes de procesar
   await new Promise(function(resolve){setTimeout(resolve, 50);});
 
-  var d, homePlayers=null, awayPlayers=null, homeLogo=null, awayLogo=null;
+  var d, homePlayers=null, awayPlayers=null, homeLogo=null, awayLogo=null, h2hData=null;
 
   if(API_ON){
     try{
@@ -1892,7 +1887,6 @@ async function doAnalyzeWith(league,home,away){
   }
 
   // Ocultar loading y mostrar resultado
-  console.log('Mostrando resultado, d=', d ? 'OK' : 'NULL');
   document.getElementById('divLoading').style.display='none';
   render(home,away,league,d,homePlayers,awayPlayers,homeLogo,awayLogo,h2hData);
   document.getElementById('divResult').style.display='block';
