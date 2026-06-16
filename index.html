@@ -3467,8 +3467,6 @@ document.addEventListener('click', function(e) {
 
 // ── Interceptar doAnalyze para control de límites ────────────────
 // ── Control de límite de análisis ─────────────────────────────
-// SOLO interceptamos doAnalyzeWith — es el que ejecuta TODO
-// doAnalyze() ya llama a doAnalyzeWith internamente
 var _origDoAnalyzeWith = doAnalyzeWith;
 window.doAnalyzeWith = async function(league, home, away) {
   loadAnalysisCount();
@@ -3483,7 +3481,7 @@ window.doAnalyzeWith = async function(league, home, away) {
     return;
   }
   incrementAnalysis();
-  return _origDoAnalyzeWith(league, home, away);
+  await _origDoAnalyzeWith(league, home, away);
 };
 
 // ── Init ────────────────────────────────────────────────────────
