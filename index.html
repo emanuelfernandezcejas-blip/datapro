@@ -1300,25 +1300,57 @@ async function apiFetch(ep){
   if(d.errors&&Object.keys(d.errors).length>0) throw new Error(JSON.stringify(d.errors));
   return d.response;
 }
+// Mapa de nombres en español → inglés para API-Football
+var TEAM_NAME_MAP = {
+  // Selecciones en español → inglés
+  'Argelia':'Algeria','Marruecos':'Morocco','Senegal':'Senegal',
+  'Costa de Marfil':'Ivory Coast','Camerún':'Cameroon','Egipto':'Egypt',
+  'Nigeria':'Nigeria','Ghana':'Ghana','Sudáfrica':'South Africa','Túnez':'Tunisia',
+  'Arabia Saudita':'Saudi Arabia','Japón':'Japan','Corea del Sur':'South Korea',
+  'Irán':'Iran','Irak':'Iraq','Indonesia':'Indonesia','Uzbekistán':'Uzbekistan',
+  'Australia':'Australia','Nueva Zelanda':'New Zealand',
+  'Francia':'France','Alemania':'Germany','España':'Spain','Italia':'Italy',
+  'Países Bajos':'Netherlands','Portugal':'Portugal','Bélgica':'Belgium',
+  'Croacia':'Croatia','Dinamarca':'Denmark','Polonia':'Poland','Suiza':'Switzerland',
+  'Austria':'Austria','Escocia':'Scotland','Turquía':'Turkey','Rumania':'Romania',
+  'Ucrania':'Ukraine','Eslovaquia':'Slovakia','Eslovenia':'Slovenia','Georgia':'Georgia',
+  'México':'Mexico','Estados Unidos':'United States','Canadá':'Canada',
+  'Costa Rica':'Costa Rica','Panamá':'Panama','Jamaica':'Jamaica',
+  'Honduras':'Honduras','El Salvador':'El Salvador','Trinidad y Tobago':'Trinidad and Tobago',
+  'Ecuador':'Ecuador','Venezuela':'Venezuela','Bolivia':'Bolivia',
+  'Perú':'Peru','Chile':'Chile','Paraguay':'Paraguay','Colombia':'Colombia',
+  'Uruguay':'Uruguay','Brasil':'Brazil','Argentina':'Argentina',
+  'Guinea':'Guinea','Kenia':'Kenya','Zimbabue':'Zimbabwe','Angola':'Angola',
+  'República Democrática del Congo':'DR Congo','Mozambique':'Mozambique',
+  // Clubes comunes con nombres distintos
+  'Atlético Tucumán':'Atletico Tucuman','Newells OB':"Newell's Old Boys",
+  'Dep. Riestra':'Deportivo Riestra','Ind. Rivadavia':'Independiente Rivadavia',
+  'Belgrano C':'Belgrano','Barracas Central':'Barracas Central',
+  'São Paulo':'Sao Paulo','Athletico PR':'Athletico Paranaense',
+};
+
 async function findTeamId(name,league){
   var lid=LIDS[league];
   var season=league==='wc2026'?2026:2024;
-  // Intento 1: nombre exacto en la liga
+  // Traducir nombre si existe en el mapa
+  var searchName = TEAM_NAME_MAP[name] || name;
+
+  // Intento 1: nombre traducido exacto en la liga
   try{
-    var r=await apiFetch('teams?name='+encodeURIComponent(name)+'&league='+lid+'&season='+season);
+    var r=await apiFetch('teams?name='+encodeURIComponent(searchName)+'&league='+lid+'&season='+season);
     if(r&&r.length>0)return{id:r[0].team.id,logo:r[0].team.logo};
   }catch(e){}
-  // Intento 2: búsqueda por primera palabra en la liga
+  // Intento 2: búsqueda por primera palabra traducida en la liga
   try{
-    var r2=await apiFetch('teams?search='+encodeURIComponent(name.split(' ')[0])+'&league='+lid+'&season='+season);
+    var r2=await apiFetch('teams?search='+encodeURIComponent(searchName.split(' ')[0])+'&league='+lid+'&season='+season);
     if(r2&&r2.length>0)return{id:r2[0].team.id,logo:r2[0].team.logo};
   }catch(e){}
-  // Intento 3: búsqueda global sin liga
+  // Intento 3: búsqueda global con nombre traducido
   try{
-    var r3=await apiFetch('teams?search='+encodeURIComponent(name.split(' ')[0]));
+    var r3=await apiFetch('teams?search='+encodeURIComponent(searchName.split(' ')[0]));
     if(r3&&r3.length>0)return{id:r3[0].team.id,logo:r3[0].team.logo};
   }catch(e){}
-  // Intento 4: primera palabra sin acentos
+  // Intento 4: nombre original sin acentos
   try{
     var clean=name.split(' ')[0].normalize('NFD').replace(/[̀-ͯ]/g,'');
     var r4=await apiFetch('teams?search='+encodeURIComponent(clean));
