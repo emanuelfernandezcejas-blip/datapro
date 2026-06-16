@@ -3448,10 +3448,8 @@ window.doAnalyze = function() {
     }
     return;
   }
-  // Contar SOLO si el análisis llega a ejecutarse
-  var result = _origDoAnalyze.apply(this, arguments);
-  if (result !== undefined || true) incrementAnalysis();
-  return result;
+  incrementAnalysis();
+  return _origDoAnalyze();
 };
 
 // También interceptar doAnalyzeWith para el fixture
@@ -3464,13 +3462,9 @@ window.doAnalyzeWith = async function(league, home, away) {
     openAuthModal();
     return;
   }
-  try {
-    var result = await _origDoAnalyzeWith.apply(this, arguments);
-    incrementAnalysis();
-    return result;
-  } catch(e) {
-    console.error('Error en análisis:', e);
-  }
+  incrementAnalysis();
+  // Llamar directamente — doAnalyzeWith maneja sus propios errores internamente
+  return _origDoAnalyzeWith(league, home, away);
 };
 
 // ── Init ────────────────────────────────────────────────────────
