@@ -1302,8 +1302,28 @@ async function apiFetch(ep){
 }
 async function findTeamId(name,league){
   var lid=LIDS[league];
-  try{var r=await apiFetch('teams?name='+encodeURIComponent(name)+'&league='+lid+'&season=2024');if(r&&r.length>0)return{id:r[0].team.id,logo:r[0].team.logo};}catch(e){}
-  try{var r2=await apiFetch('teams?search='+encodeURIComponent(name.split(' ')[0]));if(r2&&r2.length>0)return{id:r2[0].team.id,logo:r2[0].team.logo};}catch(e){}
+  var season=league==='wc2026'?2026:2024;
+  // Intento 1: nombre exacto en la liga
+  try{
+    var r=await apiFetch('teams?name='+encodeURIComponent(name)+'&league='+lid+'&season='+season);
+    if(r&&r.length>0)return{id:r[0].team.id,logo:r[0].team.logo};
+  }catch(e){}
+  // Intento 2: búsqueda por primera palabra en la liga
+  try{
+    var r2=await apiFetch('teams?search='+encodeURIComponent(name.split(' ')[0])+'&league='+lid+'&season='+season);
+    if(r2&&r2.length>0)return{id:r2[0].team.id,logo:r2[0].team.logo};
+  }catch(e){}
+  // Intento 3: búsqueda global sin liga
+  try{
+    var r3=await apiFetch('teams?search='+encodeURIComponent(name.split(' ')[0]));
+    if(r3&&r3.length>0)return{id:r3[0].team.id,logo:r3[0].team.logo};
+  }catch(e){}
+  // Intento 4: primera palabra sin acentos
+  try{
+    var clean=name.split(' ')[0].normalize('NFD').replace(/[̀-ͯ]/g,'');
+    var r4=await apiFetch('teams?search='+encodeURIComponent(clean));
+    if(r4&&r4.length>0)return{id:r4[0].team.id,logo:r4[0].team.logo};
+  }catch(e){}
   return null;
 }
 async function getLastFixtures(teamId){return await apiFetch('fixtures?team='+teamId+'&last=5&status=FT');}
@@ -3418,21 +3438,20 @@ var _origDoAnalyze = doAnalyze;
 window.doAnalyze = function() {
   loadAnalysisCount();
   if (!canAnalyze()) {
-    // Mostrar pared de límite
     var plan = USER_PLAN;
     if (plan === 'visitor') {
-      // Invitar a registrarse
       showPanel('panelRegister');
       openAuthModal();
-    } else if (plan === 'standard') {
-      // Invitar a Premium
+    } else {
       showPanel('panelPremium');
       openAuthModal();
     }
     return;
   }
-  incrementAnalysis();
-  return _origDoAnalyze.apply(this, arguments);
+  // Contar SOLO si el análisis llega a ejecutarse
+  var result = _origDoAnalyze.apply(this, arguments);
+  if (result !== undefined || true) incrementAnalysis();
+  return result;
 };
 
 // También interceptar doAnalyzeWith para el fixture
@@ -3445,12 +3464,25 @@ window.doAnalyzeWith = async function(league, home, away) {
     openAuthModal();
     return;
   }
-  incrementAnalysis();
-  return _origDoAnalyzeWith.apply(this, arguments);
+  try {
+    var result = await _origDoAnalyzeWith.apply(this, arguments);
+    incrementAnalysis();
+    return result;
+  } catch(e) {
+    console.error('Error en análisis:', e);
+  }
 };
 
 // ── Init ────────────────────────────────────────────────────────
 loadAnalysisCount();
+
+// Reset contador — usar desde consola del browser: resetAnalysisCount()
+window.resetAnalysisCount = function() {
+  ANALYSES_TODAY = 0;
+  saveAnalysisCount();
+  updateCounter();
+  console.log('Contador reseteado');
+};
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initSupabase);
 } else {
