@@ -3466,36 +3466,23 @@ document.addEventListener('click', function(e) {
 });
 
 // ── Interceptar doAnalyze para control de límites ────────────────
-var _origDoAnalyze = doAnalyze;
-window.doAnalyze = function() {
-  loadAnalysisCount();
-  if (!canAnalyze()) {
-    var plan = USER_PLAN;
-    if (plan === 'visitor') {
-      showPanel('panelRegister');
-      openAuthModal();
-    } else {
-      showPanel('panelPremium');
-      openAuthModal();
-    }
-    return;
-  }
-  incrementAnalysis();
-  return _origDoAnalyze();
-};
-
-// También interceptar doAnalyzeWith para el fixture
+// ── Control de límite de análisis ─────────────────────────────
+// SOLO interceptamos doAnalyzeWith — es el que ejecuta TODO
+// doAnalyze() ya llama a doAnalyzeWith internamente
 var _origDoAnalyzeWith = doAnalyzeWith;
 window.doAnalyzeWith = async function(league, home, away) {
   loadAnalysisCount();
   if (!canAnalyze()) {
     var plan = USER_PLAN;
-    showPanel(plan === 'visitor' ? 'panelRegister' : 'panelPremium');
+    if (plan === 'visitor') {
+      showPanel('panelRegister');
+    } else {
+      showPanel('panelPremium');
+    }
     openAuthModal();
     return;
   }
   incrementAnalysis();
-  // Llamar directamente — doAnalyzeWith maneja sus propios errores internamente
   return _origDoAnalyzeWith(league, home, away);
 };
 
