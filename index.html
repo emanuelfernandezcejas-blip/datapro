@@ -1812,6 +1812,17 @@ async function doAnalyze(){
 async function doAnalyzeWith(league,home,away){
   if(!league||!home||!away||home===away) return;
 
+  // Control de límite de análisis
+  loadAnalysisCount();
+  if(!canAnalyze()){
+    var plan=USER_PLAN;
+    if(plan==='visitor'){showPanel('panelRegister');}
+    else{showPanel('panelPremium');}
+    openAuthModal();
+    return;
+  }
+  incrementAnalysis();
+
   // Sincronizar selects
   var lSel=document.getElementById('selLeague');
   for(var i=0;i<lSel.options.length;i++){if(lSel.options[i].value===league){lSel.selectedIndex=i;break;}}
@@ -3466,23 +3477,7 @@ document.addEventListener('click', function(e) {
 });
 
 // ── Interceptar doAnalyze para control de límites ────────────────
-// ── Control de límite de análisis ─────────────────────────────
-var _origDoAnalyzeWith = doAnalyzeWith;
-window.doAnalyzeWith = async function(league, home, away) {
-  loadAnalysisCount();
-  if (!canAnalyze()) {
-    var plan = USER_PLAN;
-    if (plan === 'visitor') {
-      showPanel('panelRegister');
-    } else {
-      showPanel('panelPremium');
-    }
-    openAuthModal();
-    return;
-  }
-  incrementAnalysis();
-  await _origDoAnalyzeWith(league, home, away);
-};
+// ── Control de límites movido a doAnalyzeWith ──
 
 // ── Init ────────────────────────────────────────────────────────
 loadAnalysisCount();
